@@ -1,8 +1,7 @@
 fastapi
 uvicorn
 pydantic
-sqlalchemy
-pymysql
+pydantic-settings
 redis
 python-dotenv
 python-jose
@@ -11,3 +10,4 @@ bcrypt
 pandas
 openpyxl
 python-multipart
+requests
