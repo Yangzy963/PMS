@@ -7,13 +7,13 @@ def employee_table(data, selection_mode=False):
     员工信息表格
 
     :param data: 员工数据列表，每项为 dict，需包含以下 key：
-                 number, name, gender, age, phone, department, position,
+                 number, name, gender, age, phone, email, department, position,
                  jointime, createtime, updatetime
     :param selection_mode: 是否显示批量选择勾选框
     """
     # 基础表头
     base_headers = [
-        "人员编号", "姓名", "性别", "年龄", "手机号",
+        "人员编号", "姓名", "性别", "年龄", "手机号", "邮箱",
         "部门", "职位", "入职时间", "创建时间", "更新时间", "操作"
     ]
 
@@ -43,6 +43,7 @@ def employee_table(data, selection_mode=False):
             html.Td(emp.get("gender", "")),
             html.Td(emp.get("age", "")),
             html.Td(emp.get("phone", "")),
+            html.Td(emp.get("email", "")),
             html.Td(emp.get("department", "")),
             html.Td(emp.get("position", "")),
             html.Td(emp.get("jointime", "")),
