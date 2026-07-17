@@ -13,7 +13,10 @@ dash.register_page(__name__, path="/employee", title="人员管理")
 employee_modal = dbc.Modal(
     [
         dbc.ModalHeader(dbc.ModalTitle(id="modal-title")),
-        dbc.ModalBody(employee_form()),
+        dbc.ModalBody([
+            employee_form(),
+            html.Div(id="save-result", className="mt-3"),
+        ]),
         dbc.ModalFooter([
             dbc.Button("保存", id="save-employee", color="success"),
             dbc.Button("取消", id="close-modal", color="secondary"),
@@ -256,12 +259,11 @@ def confirm_batch_delete(n_clicks, selected_values):
         Input("open-modal", "n_clicks"),
         Input({"type": "edit-button", "index": ALL}, "n_clicks"),
         Input("close-modal", "n_clicks"),
-        Input("save-employee", "n_clicks")
     ],
     State("employee-modal", "is_open"),
     prevent_initial_call=True
 )
-def handle_modal(open_click, edit_clicks, close_click, save_click, is_open):
+def handle_modal(open_click, edit_clicks, close_click, is_open):
     ctx = callback_context
     if not ctx.triggered:
         return dash.no_update, dash.no_update
@@ -276,19 +278,84 @@ def handle_modal(open_click, edit_clicks, close_click, save_click, is_open):
         if any(n for n in (edit_clicks or []) if n):
             return True, "编辑人员"
 
-    elif trigger_id in ["close-modal", "save-employee"]:
+    elif trigger_id == "close-modal":
         return False, dash.no_update
 
     return is_open, dash.no_update
 
 
-# 保存成功后的提示（可后续扩展）
+# ====================== 弹窗打开/关闭时清空保存结果提示 ======================
 @callback(
-    Output("dummy-output", "children", allow_duplicate=True),
-    Input("save-employee", "n_clicks"),
+    Output("save-result", "children", allow_duplicate=True),
+    Input("employee-modal", "is_open"),
     prevent_initial_call=True
 )
-def save_employee(n_clicks):
-    if n_clicks:
-        print("✅ 人员信息保存成功（Mock）")
-    return ""
+def clear_save_result(is_open):
+    """弹窗状态变化时清空保存结果提示"""
+    if is_open:
+        return ""
+    return dash.no_update
+
+
+# 保存人员信息（新增）
+@callback(
+    [Output("employee-modal", "is_open", allow_duplicate=True),
+     Output("refresh-trigger", "data", allow_duplicate=True),
+     Output("save-result", "children"),
+     Output("emp-number", "value"),
+     Output("emp-name", "value"),
+     Output("emp-gender", "value"),
+     Output("emp-age", "value"),
+     Output("emp-phone", "value"),
+     Output("emp-email", "value"),
+     Output("emp-department", "value"),
+     Output("emp-position", "value"),
+     Output("emp-jointime", "value")],
+    Input("save-employee", "n_clicks"),
+    [State("emp-number", "value"),
+     State("emp-name", "value"),
+     State("emp-gender", "value"),
+     State("emp-age", "value"),
+     State("emp-phone", "value"),
+     State("emp-email", "value"),
+     State("emp-department", "value"),
+     State("emp-position", "value"),
+     State("emp-jointime", "value"),
+     State("auth-store", "data"),
+     State("refresh-trigger", "data")],
+    prevent_initial_call=True
+)
+def save_employee(n_clicks, number, name, gender, age, phone, email, department, position, jointime, auth_data, refresh_data):
+    """新增人员"""
+    if not n_clicks:
+        return dash.no_update, dash.no_update, "", dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+
+    # 校验必填字段
+    if not number or not name:
+        return dash.no_update, dash.no_update, dbc.Alert("人员编号和姓名不能为空", color="danger"), dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+
+    token = auth_data.get("token") if auth_data else None
+    if not token:
+        return dash.no_update, dash.no_update, dbc.Alert("登录已过期，请重新登录", color="warning"), dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+
+    data = {
+        "number": number,
+        "name": name,
+        "gender": gender or "",
+        "age": int(age) if age else None,
+        "phone": phone or "",
+        "email": email or "",
+        "department": department or "",
+        "position": position or "",
+        "jointime": jointime or "",
+    }
+
+    try:
+        result = api_client.create_employee(token, data)
+        if result.get("code") == 200:
+            # 新增成功：关闭弹窗、刷新列表、清空表单
+            return False, (refresh_data or 0) + 1, dbc.Alert("新增人员成功", color="success"), "", "", "", None, "", "", "", "", ""
+        else:
+            return dash.no_update, dash.no_update, dbc.Alert(f"新增失败：{result.get('message')}", color="danger"), dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+    except Exception as e:
+        return dash.no_update, dash.no_update, dbc.Alert(f"请求异常：{str(e)}", color="danger"), dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update

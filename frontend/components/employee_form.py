@@ -1,10 +1,19 @@
 import dash_bootstrap_components as dbc
-from dash import html
+from dash import html, dcc
 
 
-def employee_form():
+def employee_form(employee_id=None):
+    """
+    员工表单
+
+    :param employee_id: 编辑时传入员工 Redmine Issue ID，新增时为空
+    """
     return dbc.Form(
         [
+            # 隐藏字段：编辑时使用
+            dcc.Input(id="emp-id", value=employee_id, style={"display": "none"}) if employee_id else
+            dcc.Input(id="emp-id", style={"display": "none"}),
+
             dbc.Row([
                 dbc.Col(dbc.Label("人员编号", className="fw-bold"), width=3),
                 dbc.Col(dbc.Input(id="emp-number", placeholder="人员编号"), width=9),
@@ -28,6 +37,11 @@ def employee_form():
             dbc.Row([
                 dbc.Col(dbc.Label("手机号", className="fw-bold"), width=3),
                 dbc.Col(dbc.Input(id="emp-phone", placeholder="手机号"), width=9),
+            ], className="mb-3"),
+
+            dbc.Row([
+                dbc.Col(dbc.Label("邮箱", className="fw-bold"), width=3),
+                dbc.Col(dbc.Input(id="emp-email", placeholder="邮箱", type="email"), width=9),
             ], className="mb-3"),
 
             dbc.Row([
