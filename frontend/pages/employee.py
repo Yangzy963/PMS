@@ -176,11 +176,13 @@ def handle_modal(open_click, edit_clicks, close_click, save_click, is_open):
 
     trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
-    if trigger_id == "open-modal":
+    # 只有按钮确实被点击过才打开弹窗，避免组件重建时误触发
+    if trigger_id == "open-modal" and open_click:
         return True, "新增人员"
 
     elif "edit-button" in trigger_id:
-        return True, "编辑人员"
+        if any(n for n in (edit_clicks or []) if n):
+            return True, "编辑人员"
 
     elif trigger_id in ["close-modal", "save-employee"]:
         return False, dash.no_update
