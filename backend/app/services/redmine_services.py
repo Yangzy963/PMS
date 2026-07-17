@@ -184,7 +184,38 @@ class RedmineClient:
             "updatetime": issue.get("updated_on", ""),
         }
 
-    # ====================== CRUD ======================
+    def _fetch_all_issues(self, base_params: dict) -> list[dict]:
+        """
+        分批从 Redmine 拉取所有 Issue
+
+        Redmine REST API 单次最多返回 100 条记录，
+        因此需要通过多次请求 offset/limit 来获取全部数据。
+        """
+        all_issues = []
+        offset = 0
+        batch_size = 100
+
+        while True:
+            params = {
+                **base_params,
+                "offset": offset,
+                "limit": batch_size,
+            }
+            data = self._request("GET", "/issues.json", params=params)
+            issues = data.get("issues", [])
+
+            if not issues:
+                break
+
+            all_issues.extend(issues)
+
+            # Redmine 返回数量不足 batch_size，说明已经取完
+            if len(issues) < batch_size:
+                break
+
+            offset += batch_size
+
+        return all_issues
 
     def create_employee(self, employee: dict) -> dict:
         """创建员工"""
@@ -251,18 +282,15 @@ class RedmineClient:
         project_id = self.get_project_id()
         tracker_id = self.get_tracker_id()
 
-        params = {
+        base_params = {
             "project_id": project_id,
             "tracker_id": tracker_id,
-            "offset": 0,
-            "limit": 10000,
             "sort": sort,
             "status_id": "*",  # 包含所有状态
             "include": "custom_fields",
         }
 
-        data = self._request("GET", "/issues.json", params=params)
-        issues = data.get("issues", [])
+        issues = self._fetch_all_issues(base_params)
 
         employees = [self._issue_to_employee(issue) for issue in issues]
 
@@ -348,16 +376,14 @@ class RedmineClient:
         project_id = self.get_project_id()
         tracker_id = self.get_tracker_id()
 
-        params = {
+        base_params = {
             "project_id": project_id,
             "tracker_id": tracker_id,
             "status_id": "*",
-            "limit": 10000,
             "include": "custom_fields",
         }
 
-        data = self._request("GET", "/issues.json", params=params)
-        issues = data.get("issues", [])
+        issues = self._fetch_all_issues(base_params)
 
         for issue in issues:
             employee = self._issue_to_employee(issue)

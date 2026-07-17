@@ -5,7 +5,7 @@ import dash_bootstrap_components as dbc
 from components.employee_table import employee_table
 from components.search_bar import search_bar
 from components.employee_form import employee_form
-from data.mock_employee import employees
+from services import api_client
 
 dash.register_page(__name__, path="/employee", title="人员管理")
 
@@ -30,6 +30,15 @@ layout = dbc.Container(
 
         # 批量删除模式状态
         dcc.Store(id="batch-mode", data=False),
+
+        # 人员数据缓存
+        dcc.Store(id="employees-data", data=[]),
+
+        # 分页信息
+        dcc.Store(id="pagination-info", data={"page": 1, "total": 0}),
+
+        # 刷新触发器
+        dcc.Store(id="refresh-trigger", data=0),
 
         # 顶部操作按钮行
         dbc.Row([
@@ -75,8 +84,23 @@ layout = dbc.Container(
         search_bar(),
         html.Hr(),
 
+        # 状态提示（加载中、错误等）
+        html.Div(id="employee-list-status"),
+
         # 动态表格容器
         html.Div(id="employee-table-container"),
+
+        # 分页信息
+        html.Div(id="pagination-info-display", className="text-muted mt-2"),
+
+        # 分页控件
+        dbc.Pagination(
+            id="employee-pagination",
+            active_page=1,
+            max_value=1,
+            fully_expanded=False,
+            className="mt-3"
+        ),
 
         employee_modal,
 
@@ -90,14 +114,82 @@ layout = dbc.Container(
 )
 
 
+# ====================== 加载人员列表数据 ======================
+@callback(
+    [Output("employees-data", "data"),
+     Output("employee-list-status", "children"),
+     Output("pagination-info", "data")],
+    [Input("url", "pathname"),
+     Input("refresh-trigger", "data"),
+     Input("employee-pagination", "active_page")],
+    State("auth-store", "data"),
+)
+def load_employees(pathname, refresh, active_page, auth_data):
+    """从后端加载人员列表（支持分页）"""
+    if pathname != "/employee":
+        return dash.no_update, dash.no_update, dash.no_update
+
+    token = auth_data.get("token") if auth_data else None
+    if not token:
+        # 无 Token 时不请求，由路由守卫处理跳转
+        return [], dash.no_update, {"page": 1, "total": 0}
+
+    page = active_page or 1
+    limit = 20
+    offset = (page - 1) * limit
+
+    try:
+        result = api_client.get_employees(token, params={"offset": offset, "limit": limit})
+        if result.get("code") == 200:
+            data = result.get("data", {})
+            items = data.get("items", [])
+            total = data.get("total", 0)
+            return items, "", {"page": page, "total": total}
+        else:
+            return [], dbc.Alert(f"加载失败：{result.get('message')}", color="danger", className="mt-3"), {"page": 1, "total": 0}
+    except Exception as e:
+        return [], dbc.Alert(f"请求异常：{str(e)}", color="danger", className="mt-3"), {"page": 1, "total": 0}
+
+
+# ====================== 分页控件更新 ======================
+@callback(
+    [Output("employee-pagination", "max_value"),
+     Output("pagination-info-display", "children")],
+    Input("pagination-info", "data"),
+)
+def update_pagination(pagination_info):
+    """根据总数更新分页控件"""
+    total = pagination_info.get("total", 0)
+    page = pagination_info.get("page", 1)
+    limit = 20
+    max_page = max(1, (total + limit - 1) // limit)
+
+    info = f"共 {total} 条记录，当前第 {page} 页，每页 {limit} 条"
+    return max_page, info
+
+
+# ====================== 切换页面时重置到第一页 ======================
+@callback(
+    Output("employee-pagination", "active_page"),
+    Input("url", "pathname"),
+    prevent_initial_call=True
+)
+def reset_pagination(pathname):
+    """进入人员管理页时重置到第一页"""
+    if pathname == "/employee":
+        return 1
+    return dash.no_update
+
+
 # ====================== 表格渲染（根据批量模式动态显示勾选框）======================
 @callback(
     Output("employee-table-container", "children"),
-    Input("batch-mode", "data")
+    [Input("employees-data", "data"),
+     Input("batch-mode", "data")]
 )
-def render_employee_table(batch_mode):
+def render_employee_table(employees_data, batch_mode):
     """根据批量模式重新渲染表格"""
-    return employee_table(employees, selection_mode=batch_mode)
+    return employee_table(employees_data or [], selection_mode=batch_mode)
 
 
 # ====================== 批量删除模式切换 ======================
