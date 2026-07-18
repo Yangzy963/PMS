@@ -5,7 +5,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # 项目根目录：backend/app/core/config.py -> backend/app/core -> backend/app -> backend -> 项目根目录
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
-
 class Settings(BaseSettings):
     """应用配置，优先从环境变量读取，其次从项目根目录的 .env 文件读取"""
 

@@ -1,3 +1,5 @@
+import base64
+import io
 import dash
 from dash import html, dcc, callback, Input, Output, State, ALL, callback_context
 import dash_bootstrap_components as dbc
@@ -96,8 +98,8 @@ layout = dbc.Container(
         # 操作结果提示（删除成功/失败等），显示在表格上方
         html.Div(id="batch-delete-result"),
 
-        # 消息自动消失定时器
-        dcc.Interval(id="message-clear-interval", interval=3000, n_intervals=0),
+        # 消息定时清除器
+        dcc.Interval(id="message-timer", interval=5000),
 
         # 状态提示（加载中、错误等）
         html.Div(id="employee-list-status"),
@@ -314,15 +316,15 @@ def toggle_batch_mode(batch_click, cancel_click, confirm_click, batch_mode):
     return False, {"display": "block"}, {"display": "none"}, {"display": "none"}, {"display": "block"}
 
 
-# ====================== 消息自动消失 ======================
+# ====================== 消息自动清除 ======================
 @callback(
     Output("batch-delete-result", "children", allow_duplicate=True),
-    Input("message-clear-interval", "n_intervals"),
+    Input("message-timer", "n_intervals"),
     State("batch-delete-result", "children"),
-    prevent_initial_call=True
+    prevent_initial_call=True,
 )
 def auto_clear_message(n_intervals, current_message):
-    """操作提示 3 秒后自动消失"""
+    """操作提示 5 秒后自动消失"""
     if current_message:
         return ""
     return dash.no_update
@@ -591,3 +593,59 @@ def save_employee(n_clicks, emp_id, number, name, gender, age, phone, email, dep
             return dash.no_update, dash.no_update, dbc.Alert(f"{action}失败：{result.get('message')}", color="danger"), dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
     except Exception as e:
         return dash.no_update, dash.no_update, dbc.Alert(f"请求异常：{str(e)}", color="danger"), dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+
+
+# ====================== 数据导入 ======================
+@callback(
+    [Output("batch-delete-result", "children", allow_duplicate=True),
+     Output("refresh-trigger", "data", allow_duplicate=True)],
+    Input("upload-employee-data", "contents"),
+    [State("upload-employee-data", "filename"),
+     State("auth-store", "data"),
+     State("refresh-trigger", "data")],
+    prevent_initial_call=True
+)
+def handle_import(contents, filename, auth_data, refresh_data):
+    """处理数据导入"""
+    if not contents or not filename:
+        return dash.no_update, dash.no_update
+
+    token = auth_data.get("token") if auth_data else None
+    if not token:
+        return dbc.Alert("登录已过期，请重新登录", color="warning", className="mt-3"), dash.no_update
+
+    # 解析 base64 编码的文件内容
+    _, content_string = contents.split(",")
+    file_bytes = base64.b64decode(content_string)
+
+    try:
+        import_result = api_client.import_employees(
+            token,
+            files={"file": (filename, io.BytesIO(file_bytes))},
+        )
+
+        if import_result.get("code") == 200:
+            data = import_result.get("data", {})
+            total = data.get("total", 0)
+            success = data.get("success", 0)
+            failed = data.get("failed", 0)
+            skipped = data.get("skipped", 0)
+            overwritten = data.get("overwritten", 0)
+
+            parts = [f"导入完成：共 {total} 条"]
+            if success:
+                parts.append(f"成功 {success} 条")
+            if overwritten:
+                parts.append(f"覆盖 {overwritten} 条")
+            if skipped:
+                parts.append(f"跳过 {skipped} 条")
+            if failed:
+                parts.append(f"失败 {failed} 条")
+
+            message = "，".join(parts)
+            color = "success" if failed == 0 else "warning"
+            return dbc.Alert(message, color=color, className="mt-3"), (refresh_data or 0) + 1
+        else:
+            return dbc.Alert(f"导入失败：{import_result.get('message')}", color="danger", className="mt-3"), dash.no_update
+    except Exception as e:
+        return dbc.Alert(f"导入异常：{str(e)}", color="danger", className="mt-3"), dash.no_update
