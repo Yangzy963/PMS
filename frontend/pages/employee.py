@@ -43,6 +43,9 @@ layout = dbc.Container(
         # 刷新触发器
         dcc.Store(id="refresh-trigger", data=0),
 
+        # 当前待删除的人员 ID
+        dcc.Store(id="delete-employee-id", data=None),
+
         # 顶部操作按钮行
         dbc.Row([
             dbc.Col(dbc.Button("新增人员", id="open-modal", color="success"), width="auto"),
@@ -87,6 +90,12 @@ layout = dbc.Container(
         search_bar(),
         html.Hr(),
 
+        # 操作结果提示（删除成功/失败等），显示在表格上方
+        html.Div(id="batch-delete-result"),
+
+        # 消息自动消失定时器
+        dcc.Interval(id="message-clear-interval", interval=3000, n_intervals=0),
+
         # 状态提示（加载中、错误等）
         html.Div(id="employee-list-status"),
 
@@ -107,11 +116,22 @@ layout = dbc.Container(
 
         employee_modal,
 
+        # 删除确认弹窗
+        dbc.Modal(
+            [
+                dbc.ModalHeader(dbc.ModalTitle("确认删除")),
+                dbc.ModalBody("确定要删除该人员吗？此操作不可恢复。"),
+                dbc.ModalFooter([
+                    dbc.Button("确定删除", id="confirm-single-delete", color="danger"),
+                    dbc.Button("取消", id="cancel-single-delete", color="secondary"),
+                ]),
+            ],
+            id="delete-confirm-modal",
+            is_open=False,
+        ),
+
         # 隐藏占位元素，用于满足旧 callback 输出
         html.Div(id="dummy-output", style={"display": "none"}),
-
-        # 批量删除结果提示
-        html.Div(id="batch-delete-result"),
     ],
     fluid=True
 )
@@ -224,31 +244,135 @@ def toggle_batch_mode(batch_click, cancel_click, confirm_click, batch_mode):
     return False, {"display": "block"}, {"display": "none"}, {"display": "none"}, {"display": "block"}
 
 
-# ====================== 确认批量删除 ======================
+# ====================== 消息自动消失 ======================
 @callback(
-    Output("batch-delete-result", "children"),
-    Input("confirm-batch-delete", "n_clicks"),
-    State({"type": "select-checkbox", "index": ALL}, "value"),
+    Output("batch-delete-result", "children", allow_duplicate=True),
+    Input("message-clear-interval", "n_intervals"),
+    State("batch-delete-result", "children"),
     prevent_initial_call=True
 )
-def confirm_batch_delete(n_clicks, selected_values):
+def auto_clear_message(n_intervals, current_message):
+    """操作提示 3 秒后自动消失"""
+    if current_message:
+        return ""
+    return dash.no_update
+
+
+# ====================== 单条删除：打开确认弹窗 ======================
+@callback(
+    [Output("delete-confirm-modal", "is_open"),
+     Output("delete-employee-id", "data")],
+    Input({"type": "delete-button", "index": ALL}, "n_clicks"),
+    State("employees-data", "data"),
+    prevent_initial_call=True
+)
+def open_delete_modal(delete_clicks, employees_data):
+    """点击单条删除按钮时打开确认弹窗"""
+    ctx = callback_context
+    if not ctx.triggered:
+        return dash.no_update, dash.no_update
+
+    for i, n in enumerate(delete_clicks or []):
+        if n:
+            emp = employees_data[i] if i < len(employees_data) else {}
+            return True, emp.get("id")
+
+    return dash.no_update, dash.no_update
+
+
+# ====================== 单条删除：确认删除 ======================
+@callback(
+    [Output("delete-confirm-modal", "is_open", allow_duplicate=True),
+     Output("refresh-trigger", "data", allow_duplicate=True),
+     Output("batch-delete-result", "children")],
+    Input("confirm-single-delete", "n_clicks"),
+    [State("delete-employee-id", "data"),
+     State("auth-store", "data"),
+     State("refresh-trigger", "data")],
+    prevent_initial_call=True
+)
+def confirm_single_delete(n_clicks, employee_id, auth_data, refresh_data):
+    """确认单条删除"""
+    if not n_clicks or not employee_id:
+        return dash.no_update, dash.no_update, dash.no_update
+
+    token = auth_data.get("token") if auth_data else None
+    if not token:
+        return False, dash.no_update, dbc.Alert("登录已过期", color="warning", className="mt-3")
+
+    try:
+        result = api_client.delete_employee(token, employee_id)
+        if result.get("code") == 200:
+            return False, (refresh_data or 0) + 1, dbc.Alert("删除人员成功", color="success", className="mt-3")
+        else:
+            return False, dash.no_update, dbc.Alert(f"删除失败：{result.get('message')}", color="danger", className="mt-3")
+    except Exception as e:
+        return False, dash.no_update, dbc.Alert(f"请求异常：{str(e)}", color="danger", className="mt-3")
+
+
+# ====================== 单条删除：取消删除 ======================
+@callback(
+    Output("delete-confirm-modal", "is_open", allow_duplicate=True),
+    Input("cancel-single-delete", "n_clicks"),
+    prevent_initial_call=True
+)
+def cancel_single_delete(n_clicks):
+    """取消单条删除"""
+    if n_clicks:
+        return False
+    return dash.no_update
+
+
+# ====================== 确认批量删除 ======================
+@callback(
+    [Output("batch-delete-result", "children", allow_duplicate=True),
+     Output("refresh-trigger", "data", allow_duplicate=True),
+     Output("batch-mode", "data", allow_duplicate=True)],
+    Input("confirm-batch-delete", "n_clicks"),
+    [State({"type": "select-checkbox", "index": ALL}, "value"),
+     State("employees-data", "data"),
+     State("auth-store", "data"),
+     State("refresh-trigger", "data")],
+    prevent_initial_call=True
+)
+def confirm_batch_delete(n_clicks, selected_values, employees_data, auth_data, refresh_data):
     """处理批量删除确认"""
     if not n_clicks:
-        return dash.no_update
+        return dash.no_update, dash.no_update, dash.no_update
 
     selected_indices = [i for i, v in enumerate(selected_values) if v]
 
     if not selected_indices:
-        return dbc.Alert("请先选择要删除的人员", color="warning", className="mt-3")
+        return dbc.Alert("请先选择要删除的人员", color="warning", className="mt-3"), dash.no_update, dash.no_update
 
-    # TODO: 后续接入 Redmine API 执行真实删除
-    print(f"🗑️ 批量删除选中的人员索引: {selected_indices}")
+    token = auth_data.get("token") if auth_data else None
+    if not token:
+        return dbc.Alert("登录已过期", color="warning", className="mt-3"), dash.no_update, False
 
-    return dbc.Alert(
-        f"已选择 {len(selected_indices)} 条记录进行批量删除（当前为 Mock，后续对接 Redmine）",
-        color="info",
-        className="mt-3"
-    )
+    # 获取选中人员的 Redmine Issue ID
+    employee_ids = []
+    for idx in selected_indices:
+        if idx < len(employees_data):
+            emp_id = employees_data[idx].get("id")
+            if emp_id:
+                employee_ids.append(emp_id)
+
+    if not employee_ids:
+        return dbc.Alert("未获取到有效的员工 ID", color="warning", className="mt-3"), dash.no_update, dash.no_update
+
+    try:
+        result = api_client.batch_delete_employees(token, employee_ids)
+        if result.get("code") == 200:
+            deleted_count = result.get("data", {}).get("deleted_count", 0)
+            return (
+                dbc.Alert(f"成功删除 {deleted_count} 条人员记录", color="success", className="mt-3"),
+                (refresh_data or 0) + 1,
+                False
+            )
+        else:
+            return dbc.Alert(f"批量删除失败：{result.get('message')}", color="danger", className="mt-3"), dash.no_update, dash.no_update
+    except Exception as e:
+        return dbc.Alert(f"请求异常：{str(e)}", color="danger", className="mt-3"), dash.no_update, dash.no_update
 
 
 # ====================== 统一控制 Modal 的 Callback ======================
@@ -395,37 +519,5 @@ def save_employee(n_clicks, emp_id, number, name, gender, age, phone, email, dep
             return False, (refresh_data or 0) + 1, dbc.Alert(f"{action}人员成功", color="success"), "", "", "", None, "", "", "", "", ""
         else:
             return dash.no_update, dash.no_update, dbc.Alert(f"{action}失败：{result.get('message')}", color="danger"), dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
-    except Exception as e:
-        return dash.no_update, dash.no_update, dbc.Alert(f"请求异常：{str(e)}", color="danger"), dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
-    if not n_clicks:
-        return dash.no_update, dash.no_update, "", dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
-
-    # 校验必填字段
-    if not number or not name:
-        return dash.no_update, dash.no_update, dbc.Alert("人员编号和姓名不能为空", color="danger"), dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
-
-    token = auth_data.get("token") if auth_data else None
-    if not token:
-        return dash.no_update, dash.no_update, dbc.Alert("登录已过期，请重新登录", color="warning"), dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
-
-    data = {
-        "number": number,
-        "name": name,
-        "gender": gender or "",
-        "age": int(age) if age else None,
-        "phone": phone or "",
-        "email": email or "",
-        "department": department or "",
-        "position": position or "",
-        "jointime": jointime or "",
-    }
-
-    try:
-        result = api_client.create_employee(token, data)
-        if result.get("code") == 200:
-            # 新增成功：关闭弹窗、刷新列表、清空表单
-            return False, (refresh_data or 0) + 1, dbc.Alert("新增人员成功", color="success"), "", "", "", None, "", "", "", "", ""
-        else:
-            return dash.no_update, dash.no_update, dbc.Alert(f"新增失败：{result.get('message')}", color="danger"), dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
     except Exception as e:
         return dash.no_update, dash.no_update, dbc.Alert(f"请求异常：{str(e)}", color="danger"), dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update

@@ -28,13 +28,16 @@ def employee_table(data, selection_mode=False):
     # 表格内容
     rows = []
     for i, emp in enumerate(data):
-        # 操作按钮列（始终显示）
-        action_cell = html.Td([
-            dbc.Button("编辑", color="info", size="sm",
-                       id={"type": "edit-button", "index": i}, className="me-1"),
-            dbc.Button("删除", color="danger", size="sm",
-                       id={"type": "delete-button", "index": i}),
-        ])
+        # 批量模式下隐藏单条操作按钮
+        if selection_mode:
+            action_cell = html.Td("-")
+        else:
+            action_cell = html.Td([
+                dbc.Button("编辑", color="info", size="sm",
+                           id={"type": "edit-button", "index": i}, className="me-1"),
+                dbc.Button("删除", color="danger", size="sm",
+                           id={"type": "delete-button", "index": i}),
+            ])
 
         # 基础数据单元格
         base_cells = [
