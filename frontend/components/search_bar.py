@@ -6,57 +6,41 @@ def search_bar():
     return dbc.Row(
         [
             dbc.Col(
-                dcc.Input(
+                dbc.Input(
                     id="name-search",
                     placeholder="姓名模糊搜索",
                     className="mb-2"
                 ),
-                width=3
+                xs=12, sm=6, md=3, lg=2
             ),
 
             dbc.Col(
-                dcc.Dropdown(
+                dbc.Input(
                     id="department-search",
-                    options=[
-                        {"label": "全部", "value": "all"},
-                        {"label": "研发部", "value": "研发部"},
-                        {"label": "测试部", "value": "测试部"},
-                        {"label": "销售部", "value": "销售部"},
-                    ],
-                    placeholder="选择部门",
+                    placeholder="部门",
                     className="mb-2"
                 ),
-                width=2
+                xs=12, sm=6, md=3, lg=2
             ),
 
             dbc.Col(
-                dcc.Dropdown(
+                dbc.Input(
                     id="position-search",
-                    options=[
-                        {"label": "全部", "value": "all"},
-                        {"label": "Python工程师", "value": "Python工程师"},
-                        {"label": "测试工程师", "value": "测试工程师"},
-                        {"label": "销售专员", "value": "销售专员"},
-                    ],
-                    placeholder="选择职位",
+                    placeholder="职位",
                     className="mb-2"
                 ),
-                width=2
+                xs=12, sm=6, md=3, lg=2
             ),
 
             dbc.Col(
-                dbc.Row([
-                    dbc.Col(
-                        dcc.DatePickerRange(
-                            id="jointime-range",
-                            start_date_placeholder_text="入职开始",
-                            end_date_placeholder_text="入职结束",
-                            className="mb-2"
-                        ),
-                        width=8
-                    ),
-                ]),
-                width=3
+                dcc.DatePickerRange(
+                    id="jointime-range",
+                    start_date_placeholder_text="入职开始",
+                    end_date_placeholder_text="入职结束",
+                    className="mb-2",
+                    style={"width": "100%"}
+                ),
+                xs=12, sm=6, md=3, lg=3
             ),
 
             dbc.Col(
@@ -66,7 +50,7 @@ def search_bar():
                     color="primary",
                     className="mb-2"
                 ),
-                width=1
+                xs=6, sm=3, md=1, lg=1
             ),
 
             dbc.Col(
@@ -76,7 +60,7 @@ def search_bar():
                     color="secondary",
                     className="mb-2"
                 ),
-                width=1
+                xs=6, sm=3, md=1, lg=1
             ),
         ],
         className="mb-3 align-items-end"

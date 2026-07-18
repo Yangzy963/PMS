@@ -40,6 +40,9 @@ layout = dbc.Container(
         # 分页信息
         dcc.Store(id="pagination-info", data={"page": 1, "total": 0}),
 
+        # 搜索条件
+        dcc.Store(id="search-params", data={}),
+
         # 刷新触发器
         dcc.Store(id="refresh-trigger", data=0),
 
@@ -144,11 +147,12 @@ layout = dbc.Container(
      Output("pagination-info", "data")],
     [Input("url", "pathname"),
      Input("refresh-trigger", "data"),
-     Input("employee-pagination", "active_page")],
+     Input("employee-pagination", "active_page"),
+     Input("search-params", "data")],
     State("auth-store", "data"),
 )
-def load_employees(pathname, refresh, active_page, auth_data):
-    """从后端加载人员列表（支持分页）"""
+def load_employees(pathname, refresh, active_page, search_params, auth_data):
+    """从后端加载人员列表（支持分页和搜索）"""
     if pathname != "/employee":
         return dash.no_update, dash.no_update, dash.no_update
 
@@ -161,8 +165,23 @@ def load_employees(pathname, refresh, active_page, auth_data):
     limit = 20
     offset = (page - 1) * limit
 
+    params = {"offset": offset, "limit": limit}
+
+    # 添加搜索条件
+    if search_params:
+        if search_params.get("name"):
+            params["name"] = search_params["name"]
+        if search_params.get("department"):
+            params["department"] = search_params["department"]
+        if search_params.get("position"):
+            params["position"] = search_params["position"]
+        if search_params.get("jointime_start"):
+            params["jointime_start"] = search_params["jointime_start"]
+        if search_params.get("jointime_end"):
+            params["jointime_end"] = search_params["jointime_end"]
+
     try:
-        result = api_client.get_employees(token, params={"offset": offset, "limit": limit})
+        result = api_client.get_employees(token, params=params)
         if result.get("code") == 200:
             data = result.get("data", {})
             items = data.get("items", [])
@@ -172,6 +191,57 @@ def load_employees(pathname, refresh, active_page, auth_data):
             return [], dbc.Alert(f"加载失败：{result.get('message')}", color="danger", className="mt-3"), {"page": 1, "total": 0}
     except Exception as e:
         return [], dbc.Alert(f"请求异常：{str(e)}", color="danger", className="mt-3"), {"page": 1, "total": 0}
+
+
+# ====================== 搜索与重置 ======================
+@callback(
+    [Output("search-params", "data"),
+     Output("employee-pagination", "active_page", allow_duplicate=True)],
+    Input("search-btn", "n_clicks"),
+    [State("name-search", "value"),
+     State("department-search", "value"),
+     State("position-search", "value"),
+     State("jointime-range", "start_date"),
+     State("jointime-range", "end_date")],
+    prevent_initial_call=True
+)
+def handle_search(n_clicks, name, department, position, start_date, end_date):
+    """点击查询按钮时更新搜索条件并重置到第一页"""
+    if not n_clicks:
+        return dash.no_update, dash.no_update
+
+    params = {}
+    if name:
+        params["name"] = name
+    if department:
+        params["department"] = department
+    if position:
+        params["position"] = position
+    if start_date:
+        params["jointime_start"] = start_date
+    if end_date:
+        params["jointime_end"] = end_date
+
+    return params, 1
+
+
+@callback(
+    [Output("search-params", "data", allow_duplicate=True),
+     Output("name-search", "value"),
+     Output("department-search", "value"),
+     Output("position-search", "value"),
+     Output("jointime-range", "start_date"),
+     Output("jointime-range", "end_date"),
+     Output("employee-pagination", "active_page", allow_duplicate=True)],
+    Input("reset-btn", "n_clicks"),
+    prevent_initial_call=True
+)
+def handle_reset(n_clicks):
+    """点击重置按钮时清空搜索条件并重置到第一页"""
+    if not n_clicks:
+        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+
+    return {}, None, None, None, None, None, 1
 
 
 # ====================== 分页控件更新 ======================
