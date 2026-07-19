@@ -4,6 +4,11 @@ import requests
 BASE_URL = "http://127.0.0.1:8000"
 
 
+def logout(token: str) -> dict:
+    """退出登录"""
+    return api_request("POST", "/api/v1/logout", token=token)
+
+
 def login(username: str, password: str) -> dict:
     """
     用户登录

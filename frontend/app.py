@@ -3,7 +3,7 @@ import dash_bootstrap_components as dbc
 import dash
 
 from components.navbar import navbar
-
+from services import api_client
 
 app = Dash(
     __name__,
@@ -52,11 +52,18 @@ def render_navbar(auth_data):
     [Output("auth-store", "data", allow_duplicate=True),
      Output("url", "pathname", allow_duplicate=True)],
     Input("logout-button", "n_clicks"),
+    State("auth-store", "data"),
     prevent_initial_call=True
 )
-def handle_logout(n_clicks):
-    """退出登录：清除 Token 并返回登录页"""
+def handle_logout(n_clicks, auth_data):
+    """退出登录：调用后端接口使 Token 失效"""
     if n_clicks:
+        token = auth_data.get("token") if auth_data else None
+        if token:
+            try:
+                api_client.logout(token)
+            except Exception:
+                pass
         return None, "/"
     return dash.no_update, dash.no_update
 
