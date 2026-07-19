@@ -57,10 +57,13 @@ class RedmineClient:
         url = urljoin(self.base_url + "/", path.lstrip("/"))
         response = self.session.request(method, url, **kwargs)
 
-        if response.status_code >= 400:
+        if response.status_code >= 500:
             raise RedmineException(
                 message=f"Redmine 请求失败 [{response.status_code}]: {response.text}"
             )
+
+        if response.status_code == 404:
+            return {"status_code": 404}
 
         if response.status_code == 204 or not response.text:
             return {}

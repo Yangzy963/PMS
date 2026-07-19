@@ -40,7 +40,7 @@ def blacklist_token(token: str, ttl_seconds: int) -> bool:
         return False
 
     key = f"blacklist:token:{token}"
-    client.setex(key, ttl_seconds, "1")
+    client.set(key, "1", ex=ttl_seconds)
     return True
 
 

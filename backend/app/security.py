@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -8,8 +9,9 @@ from app.core.exceptions import AuthException
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """创建 JWT Token"""
+    """创建 JWT Token（含唯一 jti，避免同一秒生成的 Token 相同）"""
     to_encode = data.copy()
+    to_encode.setdefault("jti", uuid.uuid4().hex)
 
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta

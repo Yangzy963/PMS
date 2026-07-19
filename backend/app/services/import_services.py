@@ -4,7 +4,7 @@ from typing import Any, Optional
 import pandas as pd
 
 from app.core.exceptions import ValidationException
-from app.schemas.employee import EmployeeCreate
+from app.schemas.employee import EmployeeBase
 from app.services.redmine_services import redmine_client
 
 
@@ -99,7 +99,7 @@ def validate_employee_row(row: dict[str, Any], row_index: int) -> tuple[dict, li
     # 使用 Pydantic 再做一层校验
     if not errors:
         try:
-            EmployeeCreate(**data)
+            EmployeeBase(**data)
         except Exception as e:
             errors.append(str(e))
 

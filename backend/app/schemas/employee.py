@@ -1,10 +1,10 @@
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class EmployeeBase(BaseModel):
-    """员工基础模型"""
+    """员工基础模型（新增请求也使用此模型）"""
     number: str = Field(..., min_length=1, max_length=50, description="人员编号")
     name: str = Field(..., min_length=1, max_length=50, description="姓名")
     gender: str = Field(..., description="性别")
@@ -16,13 +16,8 @@ class EmployeeBase(BaseModel):
     jointime: Optional[str] = Field(None, description="入职时间，格式 YYYY-MM-DD")
 
 
-class EmployeeCreate(EmployeeBase):
-    """创建员工请求模型"""
-    pass
-
-
 class EmployeeUpdate(BaseModel):
-    """更新员工请求模型"""
+    """更新员工请求模型（所有字段可选）"""
     number: Optional[str] = Field(None, min_length=1, max_length=50)
     name: Optional[str] = Field(None, min_length=1, max_length=50)
     gender: Optional[str] = None
@@ -36,12 +31,11 @@ class EmployeeUpdate(BaseModel):
 
 class EmployeeResponse(EmployeeBase):
     """员工响应模型"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int = Field(..., description="Redmine Issue ID")
     createtime: str = Field("", description="创建时间")
     updatetime: str = Field("", description="更新时间")
-
-    class Config:
-        from_attributes = True
 
 
 class EmployeeListResponse(BaseModel):

@@ -6,7 +6,7 @@ from app.api.v1.auth import get_current_user
 from app.core.exceptions import NotFoundException, ValidationException
 from app.schemas.common import CommonResponse
 from app.schemas.employee import (
-    EmployeeCreate,
+    EmployeeBase,
     EmployeeListResponse,
     EmployeeResponse,
     EmployeeSearchParams,
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/employees", tags=["人员管理"])
 
 @router.post("", response_model=CommonResponse[EmployeeResponse])
 def create_employee(
-    employee: EmployeeCreate,
+    employee: EmployeeBase,
     current_user: UserInfo = Depends(get_current_user),
 ):
     """新增人员"""
