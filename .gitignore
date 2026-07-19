@@ -35,6 +35,10 @@ logs/
 # Docs (local requirements)
 docs/requirements.md
 
+# Test coverage reports
+.coverage
+htmlcov/
+
 # OS generated files
 .DS_Store
 Thumbs.db
