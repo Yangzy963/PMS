@@ -396,17 +396,22 @@ class RedmineClient:
 
         reverse = direction == "desc"
 
-        # 根据字段类型选择排序 key
-        def sort_key(emp: dict):
-            value = emp.get(field)
-            if value is None or value == "":
-                # None/空值排到最后
-                return (1, "" if reverse else "￿")
-            if field == "age":
-                return (0, int(value))
-            return (0, str(value))
+        # 分离空值和非空值，空值始终排在末尾
+        valid = []
+        none_vals = []
+        for emp in employees:
+            v = emp.get(field)
+            if v is None or v == "":
+                none_vals.append(emp)
+            else:
+                valid.append(emp)
 
-        return sorted(employees, key=sort_key, reverse=reverse)
+        if field == "age":
+            key_func = lambda e: int(e.get(field, 0))
+        else:
+            key_func = lambda e: str(e.get(field, ""))
+
+        return sorted(valid, key=key_func, reverse=reverse) + none_vals
 
     def _filter_key_to_name(self, key: str) -> Optional[str]:
         """将查询参数 key 映射到自定义字段中文名"""
