@@ -45,6 +45,9 @@ layout = dbc.Container(
         # 搜索条件
         dcc.Store(id="search-params", data={}),
 
+        # 排序状态
+        dcc.Store(id="sort-state", data={"field": "", "direction": "asc"}),
+
         # 刷新触发器
         dcc.Store(id="refresh-trigger", data=0),
 
@@ -150,11 +153,12 @@ layout = dbc.Container(
     [Input("url", "pathname"),
      Input("refresh-trigger", "data"),
      Input("employee-pagination", "active_page"),
-     Input("search-params", "data")],
+     Input("search-params", "data"),
+     Input("sort-state", "data")],
     State("auth-store", "data"),
 )
-def load_employees(pathname, refresh, active_page, search_params, auth_data):
-    """从后端加载人员列表（支持分页和搜索）"""
+def load_employees(pathname, refresh, active_page, search_params, sort_state, auth_data):
+    """从后端加载人员列表（支持分页、搜索和排序）"""
     if pathname != "/employee":
         return dash.no_update, dash.no_update, dash.no_update
 
@@ -168,6 +172,11 @@ def load_employees(pathname, refresh, active_page, search_params, auth_data):
     offset = (page - 1) * limit
 
     params = {"offset": offset, "limit": limit}
+
+    # 添加排序条件
+    sort_field = sort_state.get("field") if sort_state else ""
+    if sort_field:
+        params["sort"] = f"{sort_field}:{sort_state.get('direction', 'asc')}"
 
     # 添加搜索条件
     if search_params:
@@ -193,6 +202,38 @@ def load_employees(pathname, refresh, active_page, search_params, auth_data):
             return [], dbc.Alert(f"加载失败：{result.get('message')}", color="danger", className="mt-3"), {"page": 1, "total": 0}
     except Exception as e:
         return [], dbc.Alert(f"请求异常：{str(e)}", color="danger", className="mt-3"), {"page": 1, "total": 0}
+
+
+# ====================== 排序 ======================
+@callback(
+    Output("sort-state", "data"),
+    Input({"type": "sort-header", "index": ALL}, "n_clicks"),
+    State("sort-state", "data"),
+    prevent_initial_call=True
+)
+def handle_sort(clicks_list, sort_state):
+    """点击表头排序"""
+    ctx = callback_context
+    if not ctx.triggered:
+        return dash.no_update
+
+    clicked = ctx.triggered[0]["prop_id"]
+    # 从 prop_id 解析字段名，格式为 {"type":"sort-header","index":"number"}.n_clicks
+    import json
+    try:
+        field = json.loads(clicked.split(".n_clicks")[0])["index"]
+    except Exception:
+        return dash.no_update
+
+    current_field = sort_state.get("field", "")
+    current_dir = sort_state.get("direction", "asc")
+
+    if field == current_field:
+        # 同字段切换方向
+        return {"field": field, "direction": "desc" if current_dir == "asc" else "asc"}
+    else:
+        # 不同字段默认升序
+        return {"field": field, "direction": "asc"}
 
 
 # ====================== 搜索与重置 ======================
@@ -280,11 +321,17 @@ def reset_pagination(pathname):
 @callback(
     Output("employee-table-container", "children"),
     [Input("employees-data", "data"),
-     Input("batch-mode", "data")]
+     Input("batch-mode", "data"),
+     Input("sort-state", "data")]
 )
-def render_employee_table(employees_data, batch_mode):
-    """根据批量模式重新渲染表格"""
-    return employee_table(employees_data or [], selection_mode=batch_mode)
+def render_employee_table(employees_data, batch_mode, sort_state):
+    """根据批量模式和排序状态重新渲染表格"""
+    return employee_table(
+        employees_data or [],
+        selection_mode=batch_mode,
+        sort_field=sort_state.get("field", ""),
+        sort_direction=sort_state.get("direction", "asc"),
+    )
 
 
 # ====================== 批量删除模式切换 ======================

@@ -8,6 +8,25 @@ from app.core.config import settings
 from app.core.exceptions import NotFoundException, RedmineException, ValidationException
 
 
+# 排序字段映射：前端字段名 -> Redmine 排序参数
+# None 表示该字段不支持 Redmine 原生排序，需本地排序
+_SORT_FIELD_MAP = {
+    "number": None,      # 本地排序
+    "name": None,        # 本地排序
+    "gender": None,      # 本地排序
+    "age": None,         # 本地排序
+    "phone": None,       # 本地排序
+    "email": None,       # 本地排序
+    "department": None,  # 本地排序
+    "position": None,    # 本地排序
+    "jointime": None,    # 本地排序
+    "createtime": "created_on",
+    "updatetime": "updated_on",
+}
+
+_SORT_DIRECTIONS = {"asc", "desc"}
+
+
 class RedmineClient:
     """Redmine REST API 客户端（原生 requests 实现）"""
 
@@ -298,6 +317,9 @@ class RedmineClient:
         if filters:
             employees = self._filter_employees(employees, filters)
 
+        # 本地排序（Redmine API 只支持 created_on/updated_on 排序）
+        employees = self._sort_employees(employees, sort)
+
         total = len(employees)
 
         # 分页
@@ -352,6 +374,36 @@ class RedmineClient:
             result = filtered
 
         return result
+
+    @staticmethod
+    def _sort_employees(employees: list[dict], sort: str) -> list[dict]:
+        """
+        本地排序员工列表
+
+        :param sort: 排序表达式，如 "number:asc", "age:desc", "createtime:desc"
+        """
+        if ":" not in sort:
+            return employees
+
+        field, direction = sort.rsplit(":", 1)
+        direction = direction.lower()
+
+        if field not in _SORT_FIELD_MAP or direction not in _SORT_DIRECTIONS:
+            return employees
+
+        reverse = direction == "desc"
+
+        # 根据字段类型选择排序 key
+        def sort_key(emp: dict):
+            value = emp.get(field)
+            if value is None or value == "":
+                # None/空值排到最后
+                return (1, "" if reverse else "￿")
+            if field == "age":
+                return (0, int(value))
+            return (0, str(value))
+
+        return sorted(employees, key=sort_key, reverse=reverse)
 
     def _filter_key_to_name(self, key: str) -> Optional[str]:
         """将查询参数 key 映射到自定义字段中文名"""
