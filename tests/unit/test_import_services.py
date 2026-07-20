@@ -97,3 +97,132 @@ class TestDateNormalization:
         result, error = normalize_date("not a date")
         assert result is None
         assert error is not None
+
+    def test_pandas_timestamp(self):
+        """pandas Timestamp 类型"""
+        try:
+            import pandas as pd
+            ts = pd.Timestamp("2023-06-15")
+            from app.services.import_services import normalize_date
+            result, error = normalize_date(ts)
+            assert error is None
+            assert result == "2023-06-15"
+        except ImportError:
+            import pytest
+            pytest.skip("pandas not installed")
+
+    def test_datetime_object(self):
+        """datetime 对象"""
+        from datetime import datetime
+        dt = datetime(2023, 12, 25, 10, 30, 0)
+        from app.services.import_services import normalize_date
+        result, error = normalize_date(dt)
+        assert error is None
+        assert result == "2023-12-25"
+
+    def test_nan_string(self):
+        """"nan" 字符串返回 None"""
+        from app.services.import_services import normalize_date
+        result, error = normalize_date("nan")
+        assert error is None
+        assert result is None
+
+    def test_whitespace_only(self):
+        """纯空格"""
+        from app.services.import_services import normalize_date
+        result, error = normalize_date("   ")
+        assert error is None
+        assert result is None
+
+    def test_dmy_format(self):
+        """dd/mm/YYYY 格式（用 31 日确保不被 m/d/Y 先匹配）"""
+        from app.services.import_services import normalize_date
+        result, error = normalize_date("31/01/2023")
+        assert error is None
+        assert result == "2023-01-31"
+
+
+class TestImportEmployees:
+    """批量导入流程"""
+
+    def _valid_rows(self):
+        return [
+            {"人员编号": "001", "姓名": "张三", "性别": "男", "年龄": 30,
+             "手机号": "138", "邮箱": "a@b.com", "部门": "研发部",
+             "职位": "工程师", "入职时间": "2023-01-01"},
+            {"人员编号": "002", "姓名": "李四", "性别": "女", "年龄": 25,
+             "手机号": "139", "邮箱": "c@d.com", "部门": "测试部",
+             "职位": "经理", "入职时间": "2024-06-15"},
+        ]
+
+    def test_import_all_new_success(self):
+        """全部新增成功"""
+        from app.services.import_services import import_employees
+        with patch("app.services.import_services.redmine_client.find_by_number",
+                   return_value=None), \
+             patch("app.services.import_services.redmine_client.create_employee",
+                   return_value={"id": 1}):
+            result = import_employees(self._valid_rows(), strategy="skip")
+            assert result["total"] == 2
+            assert result["success"] == 2
+            assert result["failed"] == 0
+
+    def test_import_skip_duplicate(self):
+        """跳过重复"""
+        from app.services.import_services import import_employees
+        with patch("app.services.import_services.redmine_client.find_by_number",
+                   side_effect=[{"id": 1, "number": "001"}, None]), \
+             patch("app.services.import_services.redmine_client.create_employee",
+                   return_value={"id": 2}):
+            result = import_employees(self._valid_rows(), strategy="skip")
+            assert result["total"] == 2
+            assert result["success"] == 1
+            assert result["skipped"] == 1
+
+    def test_import_overwrite_existing(self):
+        """覆盖已有"""
+        from app.services.import_services import import_employees
+        with patch("app.services.import_services.redmine_client.find_by_number",
+                   return_value={"id": 1, "number": "001"}), \
+             patch("app.services.import_services.redmine_client.update_employee",
+                   return_value={"id": 1}):
+            result = import_employees(self._valid_rows()[:1], strategy="overwrite")
+            assert result["total"] == 1
+            assert result["overwritten"] == 1
+
+    def test_import_abort_on_duplicate(self):
+        """重复时终止"""
+        from app.services.import_services import import_employees
+        with patch("app.services.import_services.redmine_client.find_by_number",
+                   side_effect=[{"id": 1, "number": "001"}, None]):
+            result = import_employees(self._valid_rows(), strategy="abort")
+            assert result["total"] == 2
+            assert result["failed"] == 1  # 第一行重复导致失败
+            # 第二行不会被处理（abort 在第一个重复时 break）
+
+    def test_import_invalid_strategy(self):
+        """非法策略"""
+        from app.services.import_services import import_employees
+        from app.core.exceptions import ValidationException
+        with pytest.raises(ValidationException):
+            import_employees(self._valid_rows(), strategy="invalid")
+
+    def test_import_validation_error(self):
+        """行校验失败"""
+        from app.services.import_services import import_employees
+        rows = [{"人员编号": "", "姓名": "", "性别": "男"}]
+        result = import_employees(rows, strategy="skip")
+        assert result["total"] == 1
+        assert result["failed"] == 1
+        assert len(result["errors"]) == 1
+
+    def test_import_create_exception(self):
+        """创建时 Redmine 异常"""
+        from app.services.import_services import import_employees
+        with patch("app.services.import_services.redmine_client.find_by_number",
+                   return_value=None), \
+             patch("app.services.import_services.redmine_client.create_employee",
+                   side_effect=Exception("网络错误")):
+            result = import_employees(self._valid_rows()[:1], strategy="skip")
+            assert result["total"] == 1
+            assert result["failed"] == 1
