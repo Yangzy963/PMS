@@ -222,6 +222,13 @@ def handle_sort(clicks_list, sort_state):
     if not ctx.triggered:
         return dash.no_update
 
+    # 过滤表格重渲染导致的 n_clicks 伪触发：
+    # 当表格因数据刷新而重建时，表头 Span 的 n_clicks 会被重置为 None，
+    # 这个 1→None 的变化会错误地再次触发此回调，导致一次点击两次切换。
+    valid_clicks = [c for c in (clicks_list or []) if c]
+    if not valid_clicks:
+        return dash.no_update
+
     clicked = ctx.triggered[0]["prop_id"]
     # 从 prop_id 解析字段名，格式为 {"type":"sort-header","index":"number"}.n_clicks
     import json
@@ -309,17 +316,18 @@ def update_pagination(pagination_info):
     return max_page, info
 
 
-# ====================== 切换页面时重置到第一页 ======================
+# ====================== 切换页面时重置分页和排序 ======================
 @callback(
-    Output("employee-pagination", "active_page"),
+    [Output("employee-pagination", "active_page"),
+     Output("sort-state", "data", allow_duplicate=True)],
     Input("url", "pathname"),
     prevent_initial_call=True
 )
-def reset_pagination(pathname):
-    """进入人员管理页时重置到第一页"""
+def reset_on_navigate(pathname):
+    """进入人员管理页时重置分页和排序状态"""
     if pathname == "/employee":
-        return 1
-    return dash.no_update
+        return 1, {"field": "", "direction": "asc"}
+    return dash.no_update, dash.no_update
 
 
 # ====================== 表格渲染（根据批量模式动态显示勾选框）======================
