@@ -69,8 +69,10 @@ def employee_table(data, selection_mode=False, sort_field="", sort_direction="as
             action_cell = html.Td("-")
         else:
             action_cell = html.Td([
+                # 编辑按钮：打开编辑弹窗，回填当前行数据
                 dbc.Button("编辑", color="info", size="sm",
                            id={"type": "edit-button", "index": i}, className="me-1"),
+                # 删除按钮：打开删除确认弹窗
                 dbc.Button("删除", color="danger", size="sm",
                            id={"type": "delete-button", "index": i}),
             ])

@@ -20,7 +20,9 @@ employee_modal = dbc.Modal(
             html.Div(id="save-result", className="mt-3"),
         ]),
         dbc.ModalFooter([
+            # 保存按钮：提交新增/编辑表单，成功后关闭弹窗并刷新列表
             dbc.Button("保存", id="save-employee", color="success"),
+            # 取消按钮：关闭弹窗，不保存任何修改
             dbc.Button("取消", id="close-modal", color="secondary"),
         ]),
     ],
@@ -56,16 +58,17 @@ layout = dbc.Container(
 
         # 顶部操作按钮行
         dbc.Row([
+            # 新增人员按钮：打开空白表单弹窗
             dbc.Col(dbc.Button("新增人员", id="open-modal", color="success"), width="auto"),
 
-            # 批量删除按钮（普通模式显示）
+            # 批量删除按钮（普通模式显示）：进入批量选择模式
             dbc.Col(
                 dbc.Button("批量删除", id="batch-delete", color="danger"),
                 width="auto",
                 id="batch-delete-col"
             ),
 
-            # 确认删除按钮（批量模式显示）
+            # 确认删除按钮（批量模式显示）：提交选中的待删人员
             dbc.Col(
                 dbc.Button("确认删除", id="confirm-batch-delete", color="danger"),
                 width="auto",
@@ -73,7 +76,7 @@ layout = dbc.Container(
                 style={"display": "none"}
             ),
 
-            # 取消按钮（批量模式显示）
+            # 取消按钮（批量模式显示）：退出批量选择模式
             dbc.Col(
                 dbc.Button("取消", id="cancel-batch-delete", color="secondary"),
                 width="auto",
@@ -81,7 +84,7 @@ layout = dbc.Container(
                 style={"display": "none"}
             ),
 
-            # 数据导入（普通模式显示）
+            # 数据导入按钮（普通模式显示）：上传 CSV/Excel 文件批量导入
             dbc.Col(
                 html.Div(
                     dcc.Upload(
@@ -130,7 +133,9 @@ layout = dbc.Container(
                 dbc.ModalHeader(dbc.ModalTitle("确认删除")),
                 dbc.ModalBody("确定要删除该人员吗？此操作不可恢复。"),
                 dbc.ModalFooter([
+                    # 确定删除按钮：调用后端接口执行单条删除并刷新列表
                     dbc.Button("确定删除", id="confirm-single-delete", color="danger"),
+                    # 取消按钮：关闭删除确认弹窗
                     dbc.Button("取消", id="cancel-single-delete", color="secondary"),
                 ]),
             ],

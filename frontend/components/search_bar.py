@@ -44,6 +44,7 @@ def search_bar():
             ),
 
             dbc.Col(
+                # 查询按钮：根据当前搜索条件刷新人员列表，重置到第一页
                 dbc.Button(
                     "查询",
                     id="search-btn",
@@ -54,6 +55,7 @@ def search_bar():
             ),
 
             dbc.Col(
+                # 重置按钮：清空所有搜索条件并恢复到第一页
                 dbc.Button(
                     "重置",
                     id="reset-btn",

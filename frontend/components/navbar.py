@@ -14,6 +14,7 @@ def navbar(is_logged_in=False):
         # 登录后显示：人员管理、退出登录
         nav_items.append(dbc.NavLink("人员管理", href="/employee", active="exact"))
         nav_items.append(
+            # 退出登录按钮：调用后端登出接口使 Token 失效，跳转回登录页
             dbc.Button(
                 "退出登录",
                 id="logout-button",
