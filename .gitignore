@@ -37,7 +37,13 @@ docs/requirements.md
 
 # Test coverage reports
 .coverage
+.coverage_ui
 htmlcov/
+
+# Test artifacts (Allure)
+allure-results/
+allure-result/
+allure-report/
 
 # OS generated files
 .DS_Store

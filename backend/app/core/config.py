@@ -2,8 +2,19 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# 项目根目录：backend/app/core/config.py -> backend/app/core -> backend/app -> backend -> 项目根目录
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
+def _find_project_root() -> Path:
+    """向上查找包含 .env 或 .git 的目录作为项目根目录，避免硬编码层级。"""
+    current = Path(__file__).resolve().parent
+    for _ in range(5):
+        if (current / ".env").exists() or (current / ".git").exists():
+            return current
+        current = current.parent
+    # fallback：按已知层级兜底
+    return Path(__file__).resolve().parents[3]
+
+
+PROJECT_ROOT = _find_project_root()
 
 class Settings(BaseSettings):
     """应用配置，优先从环境变量读取，其次从项目根目录的 .env 文件读取"""
